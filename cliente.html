@@ -5,16 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Nuestro Menú Digital</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #fafafa; margin: 0; padding: 0; }
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #fafafa; margin: 0; padding: 0; padding-bottom: 40px; }
+
         .header { background-color: #ff5722; color: white; text-align: center; padding: 30px 20px; }
         .header h1 { margin: 0; font-size: 26px; }
         .mesa-tag { background: #333; color: white; display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 14px; margin-top: 10px; }
+
         .menu-container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
-        .plato-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
-        .plato-info h3 { margin: 0 0 5px 0; color: #222; font-size: 18px; }
+
+        .categoria-titulo { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #999; margin: 24px 0 10px 4px; }
+        .categoria-titulo:first-child { margin-top: 0; }
+
+        .plato-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+        .plato-info h3 { margin: 0 0 5px 0; color: #222; font-size: 17px; }
         .plato-info p { margin: 0; color: #ff5722; font-weight: bold; font-size: 16px; }
-        .btn-ordenar { background-color: #4CAF50; color: white; border: none; padding: 10px 18px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn-ordenar { background-color: #4CAF50; color: white; border: none; padding: 10px 18px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; flex-shrink: 0; margin-left: 10px; }
         .btn-ordenar:active { transform: scale(0.95); }
+
+        /* Modal de confirmación */
+        .modal-fondo { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-end; justify-content: center; z-index: 100; }
+        .modal-fondo.activo { display: flex; }
+        .modal-caja { background: white; border-radius: 20px 20px 0 0; padding: 24px 20px 30px; width: 100%; max-width: 500px; animation: subir 0.2s ease-out; }
+        @keyframes subir { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+        .modal-caja h2 { margin: 0 0 4px; font-size: 19px; color: #222; }
+        .modal-caja p { margin: 0 0 20px; color: #777; font-size: 14px; }
+        .modal-botones { display: flex; gap: 10px; }
+        .modal-botones button { flex: 1; padding: 13px; border-radius: 12px; border: none; font-weight: bold; font-size: 15px; cursor: pointer; }
+        .btn-confirmar { background: #4CAF50; color: white; }
+        .btn-cancelar { background: #eee; color: #555; }
+
+        /* Toast de confirmación */
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #222; color: white; padding: 14px 22px; border-radius: 30px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 200; opacity: 0; transition: all 0.3s ease; }
+        .toast.mostrar { transform: translateX(-50%) translateY(0); opacity: 1; }
     </style>
 </head>
 <body>
@@ -22,7 +45,7 @@
 <div class="header">
     <h1>Nuestro Menú Digital</h1>
     <div class="mesa-tag">
-        Mesa: 
+        Mesa:
         <select id="num-mesa" style="background: #333; color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;">
             <option value="1">Mesa 1</option>
             <option value="2">Mesa 2</option>
@@ -34,6 +57,20 @@
 </div>
 
 <div id="menu-clientes" class="menu-container"></div>
+
+<!-- Modal de confirmación antes de enviar el pedido -->
+<div id="modal-confirmar" class="modal-fondo">
+    <div class="modal-caja">
+        <h2 id="modal-nombre-plato">Plato</h2>
+        <p id="modal-detalle">¿Confirmas el pedido?</p>
+        <div class="modal-botones">
+            <button class="btn-cancelar" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn-confirmar" id="btn-confirmar-pedido">Confirmar pedido</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast">✅ Pedido enviado a cocina</div>
 
 <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -53,65 +90,101 @@
     const db = getFirestore(app);
     const contenedorMenu = document.getElementById('menu-clientes');
 
-    // Cargar todos los platos disponibles en tiempo real
+    let platoSeleccionado = null;
+
+    // Cargar todos los platos disponibles en tiempo real, agrupados por categoría
     onSnapshot(collection(db, "Platos"), (snapshot) => {
         contenedorMenu.innerHTML = '';
-        let platosVisibles = 0;
 
+        const grupos = {};
         snapshot.forEach((docSnap) => {
-            const plato = docSnap.data();
-            
-            if (plato.disponible === true) {
-                platosVisibles++;
+            const plato = { id: docSnap.id, ...docSnap.data() };
+            if (plato.disponible !== true) return;
+            const cat = plato.categoria && plato.categoria.trim() ? plato.categoria.trim() : "Menú";
+            if (!grupos[cat]) grupos[cat] = [];
+            grupos[cat].push(plato);
+        });
+
+        const categorias = Object.keys(grupos);
+        if (categorias.length === 0) {
+            contenedorMenu.innerHTML = "<p style='text-align:center; color:#999; margin-top: 30px;'>No hay productos disponibles por ahora.</p>";
+            return;
+        }
+
+        categorias.sort().forEach(categoria => {
+            const titulo = document.createElement('h2');
+            titulo.className = 'categoria-titulo';
+            titulo.innerText = categoria;
+            contenedorMenu.appendChild(titulo);
+
+            grupos[categoria].forEach(plato => {
                 const card = document.createElement('div');
                 card.className = 'plato-card';
-                
-                const fotoHTML = plato.imagen 
-                    ? `<img src="${plato.imagen}" alt="${plato.nombre}" style="width: 65px; height: 65px; border-radius: 8px; object-fit: cover; margin-right: 15px;">`
-                    : `<div style="width: 65px; height: 65px; background: #eee; border-radius: 8px; margin-right: 15px; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:11px; flex-shrink: 0;">Sin foto</div>`;
+
+                const fotoHTML = plato.imagen
+                    ? `<img src="${plato.imagen}" alt="${plato.nombre}" style="width: 60px; height: 60px; border-radius: 8px; object-fit: cover; margin-right: 14px; flex-shrink: 0;">`
+                    : `<div style="width: 60px; height: 60px; background: #f2f2f2; border-radius: 8px; margin-right: 14px; display:flex; align-items:center; justify-content:center; color:#bbb; font-size:10px; flex-shrink: 0;">Sin foto</div>`;
 
                 card.innerHTML = `
-                    <div style="display: flex; align-items: center; flex-grow: 1;">
+                    <div style="display: flex; align-items: center; flex-grow: 1; min-width: 0;">
                         ${fotoHTML}
                         <div class="plato-info">
                             <h3>${plato.nombre}</h3>
-                            <p>${plato.precio} €</p>
+                            <p>${parseFloat(plato.precio).toFixed(2)} €</p>
                         </div>
                     </div>
-                    <button class="btn-ordenar" id="btn-${docSnap.id}">Pedir</button>
+                    <button class="btn-ordenar">Pedir</button>
                 `;
+                card.querySelector('.btn-ordenar').addEventListener('click', () => abrirModal(plato));
                 contenedorMenu.appendChild(card);
-
-                // Evento para enviar el pedido a Firebase al hacer clic
-                document.getElementById(`btn-${docSnap.id}`).addEventListener('click', async () => {
-                    const mesaActual = document.getElementById('num-mesa').value;
-                    
-                    // Alerta de seguridad antes de procesar el pedido
-                    const confirmarMesa = confirm(`Vas a pedir: ${plato.nombre}.\n\n¿Confirmas que estás sentado en la Mesa ${mesaActual}?`);
-                    
-                    // Si el cliente presiona "Cancelar", detenemos la ejecución aquí
-                    if (!confirmarMesa) {
-                        return;
-                    }
-                    
-                    try {
-    await addDoc(collection(db, "Pedidos"), {
-        nombre: plato.nombre, // CAMBIO: Usar 'nombre' en lugar de 'producto'
-        precio: plato.precio, // Asegúrate de incluir el precio si lo necesitas
-        mesa: parseInt(mesaActual), // CAMBIO: Convertir a número para que coincida con el admin
-        hora: serverTimestamp(),
-        estado: "pendiente"
-    });
-    alert(`¡Pedido enviado!`);
-} catch (error) {
-    console.error("Error al enviar pedido:", error);
-}
-                });
-            }
+            });
         });
+    });
 
-        if (platosVisibles === 0) {
-            contenedorMenu.innerHTML = "<p style='text-align:center; color:#999;'>No hay productos disponibles por ahora.</p>";
+    function abrirModal(plato) {
+        platoSeleccionado = plato;
+        const mesaActual = document.getElementById('num-mesa').value;
+        document.getElementById('modal-nombre-plato').innerText = plato.nombre;
+        document.getElementById('modal-detalle').innerText = `${parseFloat(plato.precio).toFixed(2)}€ — Mesa ${mesaActual}`;
+        document.getElementById('modal-confirmar').classList.add('activo');
+    }
+
+    function cerrarModal() {
+        document.getElementById('modal-confirmar').classList.remove('activo');
+        platoSeleccionado = null;
+    }
+    window.cerrarModal = cerrarModal;
+
+    function mostrarToast(texto) {
+        const toast = document.getElementById('toast');
+        toast.innerText = texto;
+        toast.classList.add('mostrar');
+        setTimeout(() => toast.classList.remove('mostrar'), 2500);
+    }
+
+    document.getElementById('btn-confirmar-pedido').addEventListener('click', async () => {
+        if (!platoSeleccionado) return;
+        const mesaActual = document.getElementById('num-mesa').value;
+        const boton = document.getElementById('btn-confirmar-pedido');
+        boton.disabled = true;
+        boton.innerText = "Enviando...";
+
+        try {
+            await addDoc(collection(db, "Pedidos"), {
+                nombre: platoSeleccionado.nombre,
+                precio: platoSeleccionado.precio,
+                mesa: parseInt(mesaActual),
+                hora: serverTimestamp(),
+                estado: "pendiente"
+            });
+            cerrarModal();
+            mostrarToast(`✅ ${platoSeleccionado.nombre} enviado a cocina`);
+        } catch (error) {
+            console.error("Error al enviar pedido:", error);
+            mostrarToast("❌ No se pudo enviar, inténtalo de nuevo");
+        } finally {
+            boton.disabled = false;
+            boton.innerText = "Confirmar pedido";
         }
     });
 </script>

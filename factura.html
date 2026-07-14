@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solicitar factura</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen flex items-center justify-center p-4">
+
+    <div class="bg-white rounded-2xl shadow-lg max-w-sm w-full p-6">
+
+        <div id="cargando" class="text-center py-10">
+            <i class="fa-solid fa-spinner fa-spin text-3xl text-gray-400"></i>
+            <p class="text-gray-400 text-sm mt-3">Cargando tu ticket...</p>
+        </div>
+
+        <div id="error-ticket" class="hidden text-center py-10">
+            <p class="text-red-500 font-semibold">No se encontró el ticket.</p>
+            <p class="text-gray-400 text-xs mt-1">Comprueba el enlace o pide ayuda en el mostrador.</p>
+        </div>
+
+        <div id="contenido" class="hidden">
+            <h1 class="text-lg font-bold text-gray-800 mb-1">🚚 Solicitar factura</h1>
+            <div id="resumen-ticket" class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm mb-4"></div>
+
+            <form id="form-factura" class="space-y-3">
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Nombre o razón social</label>
+                    <input type="text" id="f-nombre" required class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">NIF / DNI / CIF</label>
+                    <input type="text" id="f-nif" required class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Dirección</label>
+                    <input type="text" id="f-direccion" required class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                    <div>
+                        <label class="text-xs font-semibold text-gray-600">Código postal</label>
+                        <input type="text" id="f-cp" required class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                    </div>
+                    <div>
+                        <label class="text-xs font-semibold text-gray-600">Ciudad</label>
+                        <input type="text" id="f-ciudad" required class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                    </div>
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Email (opcional)</label>
+                    <input type="email" id="f-email" class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                </div>
+
+                <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-xl mt-2">
+                    Generar y descargar factura (PDF)
+                </button>
+            </form>
+
+            <p id="mensaje-ok" class="hidden text-green-600 text-sm text-center mt-4 font-semibold">
+                ✅ Factura descargada. ¡Gracias!
+            </p>
+        </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script>
+        /* =========================================================
+           1. ENCABEZADO
+        ========================================================= */
+
+        // ⚠️ IMPORTANTE: usa la MISMA config que tu panel-organizado.html
+        const firebaseConfig = {
+            apiKey: "AIzaSyCnRsS7_ayjN2FRzxphu4VpQGZmziEQRY4",
+            authDomain: "mi-carta-digital-a4c27.firebaseapp.com",
+            projectId: "mi-carta-digital-a4c27",
+            storageBucket: "mi-carta-digital-a4c27.firebasestorage.app",
+            messagingSenderId: "387737254613",
+            appId: "1:387737254613:web:dc87f0cebbcec425bac05c",
+            measurementId: "G-F7CR2WVD9M"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ⚠️ RELLENAR ANTES DE PUBLICAR: estos son tus datos fiscales como
+        // emisor de la factura. Sin esto, la factura NO es legalmente válida.
+        const DATOS_EMISOR = {
+            nombre: "Shirley Hernández",
+            nif: "55752800H",
+            direccion: "Carretera General a Los Abrigos 37, 38620 San Miguel de Abona, Santa Cruz de Tenerife, España",
+            igicPorcentaje: 7 // % de IGIC aplicable en Canarias (ajusta según tu caso)
+        };
+
+        const params = new URLSearchParams(window.location.search);
+        const ticketId = params.get("ticket");
+        let ticketData = null;
+
+        /* =========================================================
+           2. CARGA DEL TICKET
+        ========================================================= */
+        async function cargarTicket() {
+            if (!ticketId) {
+                mostrarError();
+                return;
+            }
+            try {
+                const doc = await db.collection("Tickets").doc(ticketId).get();
+                if (!doc.exists) {
+                    mostrarError();
+                    return;
+                }
+                ticketData = { id: doc.id, ...doc.data() };
+                mostrarFormulario();
+            } catch (err) {
+                console.error(err);
+                mostrarError();
+            }
+        }
+
+        function mostrarError() {
+            document.getElementById("cargando").classList.add("hidden");
+            document.getElementById("error-ticket").classList.remove("hidden");
+        }
+
+        function mostrarFormulario() {
+            document.getElementById("cargando").classList.add("hidden");
+            document.getElementById("contenido").classList.remove("hidden");
+
+            const filas = ticketData.platos.map(p => `
+                <div class="flex justify-between">
+                    <span>${p.nombre}</span>
+                    <span>${p.precio.toFixed(2)}€</span>
+                </div>
+            `).join('');
+
+            document.getElementById("resumen-ticket").innerHTML = `
+                ${filas}
+                <div class="flex justify-between font-bold border-t border-gray-200 mt-2 pt-2">
+                    <span>Total</span>
+                    <span>${ticketData.total.toFixed(2)}€</span>
+                </div>
+            `;
+        }
+
+        cargarTicket();
+
+        /* =========================================================
+           3. GENERACIÓN DE LA FACTURA EN PDF
+        ========================================================= */
+
+        // Obtiene el siguiente número de factura de forma correlativa,
+        // usando un contador guardado en Firestore (obligatorio por ley:
+        // las facturas deben numerarse de forma correlativa, sin saltos).
+        async function obtenerNumeroFactura() {
+            const contadorRef = db.collection("Contadores").doc("facturas");
+            const anio = new Date().getFullYear();
+
+            return db.runTransaction(async (t) => {
+                const doc = await t.get(contadorRef);
+                let siguiente = 1;
+                let datos = doc.exists ? doc.data() : {};
+
+                if (datos.anio === anio) {
+                    siguiente = (datos.ultimoNumero || 0) + 1;
+                }
+                t.set(contadorRef, { anio: anio, ultimoNumero: siguiente });
+                return `F-${anio}-${String(siguiente).padStart(4, '0')}`;
+            });
+        }
+
+        document.getElementById("form-factura").addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const datosCliente = {
+                nombre: document.getElementById("f-nombre").value.trim(),
+                nif: document.getElementById("f-nif").value.trim(),
+                direccion: document.getElementById("f-direccion").value.trim(),
+                cp: document.getElementById("f-cp").value.trim(),
+                ciudad: document.getElementById("f-ciudad").value.trim(),
+                email: document.getElementById("f-email").value.trim()
+            };
+
+            const btn = e.target.querySelector("button[type=submit]");
+            btn.disabled = true;
+            btn.innerText = "Generando...";
+
+            try {
+                const numeroFactura = await obtenerNumeroFactura();
+
+                // Guardamos la solicitud de factura vinculada al ticket, por si
+                // necesitas consultarla luego (contabilidad, reclamaciones, etc.)
+                await db.collection("Facturas").add({
+                    numero: numeroFactura,
+                    ticketId: ticketData.id,
+                    cliente: datosCliente,
+                    total: ticketData.total,
+                    platos: ticketData.platos,
+                    fecha: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                generarPDF(numeroFactura, datosCliente);
+
+                document.getElementById("form-factura").classList.add("hidden");
+                document.getElementById("mensaje-ok").classList.remove("hidden");
+            } catch (err) {
+                console.error(err);
+                alert("No se pudo generar la factura. Inténtalo de nuevo o pide ayuda en el mostrador.");
+                btn.disabled = false;
+                btn.innerText = "Generar y descargar factura (PDF)";
+            }
+        });
+
+        function generarPDF(numeroFactura, cliente) {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+
+            const baseImponible = ticketData.total / (1 + DATOS_EMISOR.igicPorcentaje / 100);
+            const igic = ticketData.total - baseImponible;
+
+            let y = 20;
+            doc.setFontSize(16);
+            doc.text("FACTURA", 20, y); y += 10;
+
+            doc.setFontSize(10);
+            doc.text(`Nº Factura: ${numeroFactura}`, 20, y); y += 6;
+            doc.text(`Fecha: ${new Date().toLocaleDateString('es-ES')}`, 20, y); y += 10;
+
+            doc.setFontSize(11);
+            doc.text("Emisor:", 20, y); y += 6;
+            doc.setFontSize(9);
+            doc.text(DATOS_EMISOR.nombre, 20, y); y += 5;
+            doc.text(`NIF: ${DATOS_EMISOR.nif}`, 20, y); y += 5;
+            doc.text(DATOS_EMISOR.direccion, 20, y); y += 10;
+
+            doc.setFontSize(11);
+            doc.text("Cliente:", 20, y); y += 6;
+            doc.setFontSize(9);
+            doc.text(cliente.nombre, 20, y); y += 5;
+            doc.text(`NIF: ${cliente.nif}`, 20, y); y += 5;
+            doc.text(`${cliente.direccion}, ${cliente.cp} ${cliente.ciudad}`, 20, y); y += 10;
+
+            doc.setFontSize(11);
+            doc.text("Detalle:", 20, y); y += 6;
+            doc.setFontSize(9);
+            ticketData.platos.forEach(p => {
+                doc.text(p.nombre, 20, y);
+                doc.text(`${p.precio.toFixed(2)}€`, 170, y, { align: "right" });
+                y += 5;
+            });
+
+            y += 5;
+            doc.text(`Base imponible: ${baseImponible.toFixed(2)}€`, 20, y); y += 5;
+            doc.text(`IGIC (${DATOS_EMISOR.igicPorcentaje}%): ${igic.toFixed(2)}€`, 20, y); y += 7;
+            doc.setFontSize(12);
+            doc.text(`TOTAL: ${ticketData.total.toFixed(2)}€`, 20, y);
+
+            doc.save(`${numeroFactura}.pdf`);
+        }
+    </script>
+</body>
+</html>

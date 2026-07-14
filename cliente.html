@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuestro Menú Digital</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #fafafa; margin: 0; padding: 0; }
+        .header { background-color: #ff5722; color: white; text-align: center; padding: 30px 20px; }
+        .header h1 { margin: 0; font-size: 26px; }
+        .mesa-tag { background: #333; color: white; display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 14px; margin-top: 10px; }
+        .menu-container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
+        .plato-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 15px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+        .plato-info h3 { margin: 0 0 5px 0; color: #222; font-size: 18px; }
+        .plato-info p { margin: 0; color: #ff5722; font-weight: bold; font-size: 16px; }
+        .btn-ordenar { background-color: #4CAF50; color: white; border: none; padding: 10px 18px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn-ordenar:active { transform: scale(0.95); }
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <h1>Nuestro Menú Digital</h1>
+    <div class="mesa-tag">
+        Mesa: 
+        <select id="num-mesa" style="background: #333; color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;">
+            <option value="1">Mesa 1</option>
+            <option value="2">Mesa 2</option>
+            <option value="3" selected>Mesa 3</option>
+            <option value="4">Mesa 4</option>
+            <option value="5">Mesa 5</option>
+        </select>
+    </div>
+</div>
+
+<div id="menu-clientes" class="menu-container"></div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, onSnapshot, addDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+        apiKey: "AIzaSyCnRsS7_ayjN2FRzxphu4VpQGZmziEQRY4",
+        authDomain: "mi-carta-digital-a4c27.firebaseapp.com",
+        projectId: "mi-carta-digital-a4c27",
+        storageBucket: "mi-carta-digital-a4c27.firebasestorage.app",
+        messagingSenderId: "387737254613",
+        appId: "1:387737254613:web:dc87f0cebbcec425bac05c",
+        measurementId: "G-F7CR2WVD9M"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const contenedorMenu = document.getElementById('menu-clientes');
+
+    // Cargar todos los platos disponibles en tiempo real
+    onSnapshot(collection(db, "Platos"), (snapshot) => {
+        contenedorMenu.innerHTML = '';
+        let platosVisibles = 0;
+
+        snapshot.forEach((docSnap) => {
+            const plato = docSnap.data();
+            
+            if (plato.disponible === true) {
+                platosVisibles++;
+                const card = document.createElement('div');
+                card.className = 'plato-card';
+                
+                const fotoHTML = plato.imagen 
+                    ? `<img src="${plato.imagen}" alt="${plato.nombre}" style="width: 65px; height: 65px; border-radius: 8px; object-fit: cover; margin-right: 15px;">`
+                    : `<div style="width: 65px; height: 65px; background: #eee; border-radius: 8px; margin-right: 15px; display:flex; align-items:center; justify-content:center; color:#aaa; font-size:11px; flex-shrink: 0;">Sin foto</div>`;
+
+                card.innerHTML = `
+                    <div style="display: flex; align-items: center; flex-grow: 1;">
+                        ${fotoHTML}
+                        <div class="plato-info">
+                            <h3>${plato.nombre}</h3>
+                            <p>${plato.precio} €</p>
+                        </div>
+                    </div>
+                    <button class="btn-ordenar" id="btn-${docSnap.id}">Pedir</button>
+                `;
+                contenedorMenu.appendChild(card);
+
+                // Evento para enviar el pedido a Firebase al hacer clic
+                document.getElementById(`btn-${docSnap.id}`).addEventListener('click', async () => {
+                    const mesaActual = document.getElementById('num-mesa').value;
+                    
+                    // Alerta de seguridad antes de procesar el pedido
+                    const confirmarMesa = confirm(`Vas a pedir: ${plato.nombre}.\n\n¿Confirmas que estás sentado en la Mesa ${mesaActual}?`);
+                    
+                    // Si el cliente presiona "Cancelar", detenemos la ejecución aquí
+                    if (!confirmarMesa) {
+                        return;
+                    }
+                    
+                    try {
+    await addDoc(collection(db, "Pedidos"), {
+        nombre: plato.nombre, // CAMBIO: Usar 'nombre' en lugar de 'producto'
+        precio: plato.precio, // Asegúrate de incluir el precio si lo necesitas
+        mesa: parseInt(mesaActual), // CAMBIO: Convertir a número para que coincida con el admin
+        hora: serverTimestamp(),
+        estado: "pendiente"
+    });
+    alert(`¡Pedido enviado!`);
+} catch (error) {
+    console.error("Error al enviar pedido:", error);
+}
+                });
+            }
+        });
+
+        if (platosVisibles === 0) {
+            contenedorMenu.innerHTML = "<p style='text-align:center; color:#999;'>No hay productos disponibles por ahora.</p>";
+        }
+    });
+</script>
+</body>
+</html>

@@ -94,8 +94,11 @@
                 <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
                     <div class="flex items-center justify-between mb-4">
                         <h2 class="text-lg font-semibold text-gray-800"><i class="fa-solid fa-sliders text-blue-500 mr-2"></i>Disponibilidad de la Carta</h2>
+                        <button onclick="abrirModalPlato()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold px-3 py-1.5 rounded-lg">
+                            <i class="fa-solid fa-plus mr-1"></i>Nuevo plato
+                        </button>
                     </div>
-                    <div id="lista-disponibilidad" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div id="lista-disponibilidad" class="space-y-5">
                         <p class="text-gray-400 text-sm col-span-full">Cargando platos...</p>
                     </div>
                 </section>
@@ -189,6 +192,44 @@
                     Cerrar
                 </button>
             </div>
+        </div>
+    </div>
+
+    <!-- Modal: crear / editar plato -->
+    <div id="modal-plato" class="fixed inset-0 bg-black/50 z-[60] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6 max-h-[90vh] overflow-y-auto">
+            <h3 id="titulo-modal-plato" class="font-bold text-gray-800 mb-4">Nuevo plato</h3>
+            <form id="form-plato" class="space-y-3">
+                <input type="hidden" id="plato-id">
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Nombre</label>
+                    <input type="text" id="plato-nombre" required class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Precio (€)</label>
+                    <input type="number" id="plato-precio" required min="0" step="0.01" class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">Categoría</label>
+                    <input type="text" id="plato-categoria" list="lista-categorias-existentes" required placeholder="Entrantes, Principales, Bebidas, Postres..." class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                    <datalist id="lista-categorias-existentes"></datalist>
+                </div>
+                <div>
+                    <label class="text-xs font-semibold text-gray-600">URL de la foto (opcional)</label>
+                    <input type="text" id="plato-imagen" placeholder="https://..." class="w-full border border-gray-300 rounded-lg p-2 text-sm mt-1">
+                </div>
+                <label class="flex items-center gap-2 text-sm text-gray-600">
+                    <input type="checkbox" id="plato-disponible" class="w-4 h-4">
+                    Disponible desde ya
+                </label>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg text-sm">Guardar</button>
+                    <button type="button" onclick="cerrarModalPlato()" class="flex-1 bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 rounded-lg text-sm">Cancelar</button>
+                </div>
+                <button type="button" id="btn-borrar-plato" onclick="borrarPlato()" class="hidden w-full text-red-500 hover:underline text-xs pt-1">
+                    Borrar este plato
+                </button>
+            </form>
         </div>
     </div>
 
@@ -341,30 +382,117 @@
         function renderizarSeccionDisponibilidad() {
             const container = document.getElementById("lista-disponibilidad");
             if (todosLosPlatos.length === 0) {
-                container.innerHTML = `<p class="text-gray-400 text-sm col-span-full text-center">No hay platos.</p>`;
+                container.innerHTML = `<p class="text-gray-400 text-sm col-span-full text-center">No hay platos. Crea el primero con "Nuevo plato".</p>`;
                 return;
             }
-            container.innerHTML = "";
+
+            // Agrupa los platos por categoría (los que no tienen, van a "Sin categoría")
+            const grupos = {};
             todosLosPlatos.forEach(plato => {
-                const checked = plato.disponible ? 'checked' : '';
-                const card = document.createElement("div");
-                card.className = "flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 shadow-sm";
-                card.innerHTML = `
-                    <div>
-                        <p class="font-semibold text-gray-800 text-sm">${plato.nombre}</p>
-                        <p class="text-xs text-blue-600 font-bold">${parseFloat(plato.precio).toFixed(2)}€</p>
-                    </div>
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" class="sr-only peer" ${checked} onchange="toggleDisponibilidad('${plato.id}', this.checked)">
-                        <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
-                    </label>
+                const cat = plato.categoria && plato.categoria.trim() ? plato.categoria.trim() : "Sin categoría";
+                if (!grupos[cat]) grupos[cat] = [];
+                grupos[cat].push(plato);
+            });
+
+            container.innerHTML = "";
+            Object.keys(grupos).sort().forEach(categoria => {
+                const bloque = document.createElement("div");
+                const tarjetas = grupos[categoria].map(plato => {
+                    const checked = plato.disponible ? 'checked' : '';
+                    return `
+                        <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 shadow-sm">
+                            <div class="flex-1 min-w-0 cursor-pointer" onclick="abrirModalPlato('${plato.id}')">
+                                <p class="font-semibold text-gray-800 text-sm truncate">${plato.nombre}</p>
+                                <p class="text-xs text-blue-600 font-bold">${parseFloat(plato.precio).toFixed(2)}€</p>
+                            </div>
+                            <label class="relative inline-flex items-center cursor-pointer ml-2 shrink-0">
+                                <input type="checkbox" class="sr-only peer" ${checked} onchange="toggleDisponibilidad('${plato.id}', this.checked)">
+                                <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+                            </label>
+                        </div>
+                    `;
+                }).join('');
+
+                bloque.innerHTML = `
+                    <h3 class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">${categoria}</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">${tarjetas}</div>
                 `;
-                container.appendChild(card);
+                container.appendChild(bloque);
             });
         }
 
         function toggleDisponibilidad(id, nuevoEstado) {
             db.collection("Platos").doc(id).update({ disponible: nuevoEstado });
+        }
+
+        /* =========================================================
+           PLATOS — crear, editar, borrar
+        ========================================================= */
+        function abrirModalPlato(id) {
+            const form = document.getElementById("form-plato");
+            form.reset();
+            document.getElementById("plato-id").value = "";
+            document.getElementById("titulo-modal-plato").innerText = "Nuevo plato";
+            document.getElementById("btn-borrar-plato").classList.add("hidden");
+
+            // Sugerencias de categorías ya usadas, para no escribirlas distinto cada vez
+            const categorias = [...new Set(todosLosPlatos.map(p => p.categoria).filter(Boolean))];
+            document.getElementById("lista-categorias-existentes").innerHTML =
+                categorias.map(c => `<option value="${c}">`).join('');
+
+            if (id) {
+                const plato = todosLosPlatos.find(p => p.id === id);
+                if (plato) {
+                    document.getElementById("plato-id").value = plato.id;
+                    document.getElementById("plato-nombre").value = plato.nombre;
+                    document.getElementById("plato-precio").value = plato.precio;
+                    document.getElementById("plato-categoria").value = plato.categoria || "";
+                    document.getElementById("plato-imagen").value = plato.imagen || "";
+                    document.getElementById("plato-disponible").checked = !!plato.disponible;
+                    document.getElementById("titulo-modal-plato").innerText = "Editar plato";
+                    document.getElementById("btn-borrar-plato").classList.remove("hidden");
+                }
+            }
+            const modal = document.getElementById("modal-plato");
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function cerrarModalPlato() {
+            const modal = document.getElementById("modal-plato");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+
+        document.getElementById("form-plato").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const id = document.getElementById("plato-id").value;
+            const datos = {
+                nombre: document.getElementById("plato-nombre").value.trim(),
+                precio: parseFloat(document.getElementById("plato-precio").value),
+                categoria: document.getElementById("plato-categoria").value.trim(),
+                imagen: document.getElementById("plato-imagen").value.trim(),
+                disponible: document.getElementById("plato-disponible").checked
+            };
+            try {
+                if (id) {
+                    await db.collection("Platos").doc(id).update(datos);
+                } else {
+                    await db.collection("Platos").add(datos);
+                }
+                cerrarModalPlato();
+            } catch (err) {
+                alert("Error al guardar el plato: " + err);
+            }
+        });
+
+        async function borrarPlato() {
+            const id = document.getElementById("plato-id").value;
+            if (!id) return;
+            if (confirm("¿Borrar este plato? Esto no afecta a pedidos ya realizados.")) {
+                await db.collection("Platos").doc(id).delete();
+                cerrarModalPlato();
+            }
         }
 
         function renderizarBotonesPlatosPanel() {

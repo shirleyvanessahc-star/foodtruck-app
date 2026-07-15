@@ -98,6 +98,7 @@
                             <i class="fa-solid fa-plus mr-1"></i>Nuevo plato
                         </button>
                     </div>
+                    <input type="text" id="buscador-platos" oninput="renderizarSeccionDisponibilidad()" placeholder="Buscar plato..." class="hidden w-full border border-gray-300 rounded-lg p-2 text-sm mb-4">
                     <div id="lista-disponibilidad" class="space-y-5">
                         <p class="text-gray-400 text-sm col-span-full">Cargando platos...</p>
                     </div>
@@ -321,6 +322,37 @@
            arrancar DESPUÉS de que el usuario inicie sesión.
         ========================================================= */
 
+        let primeraCargaPedidos = true;
+        let audioContextGlobal = null;
+
+        // Genera un "ding-dong" con el propio navegador — no depende de ningún
+        // archivo de sonido externo que pueda tardar en cargar o fallar.
+        function reproducirSonidoNuevoPedido() {
+            try {
+                if (!audioContextGlobal) {
+                    audioContextGlobal = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                const ctx = audioContextGlobal;
+
+                function tono(frecuencia, inicio, duracion) {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.frequency.value = frecuencia;
+                    gain.gain.setValueAtTime(0.3, ctx.currentTime + inicio);
+                    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + inicio + duracion);
+                    osc.start(ctx.currentTime + inicio);
+                    osc.stop(ctx.currentTime + inicio + duracion);
+                }
+
+                tono(880, 0, 0.35);      // "ding"
+                tono(660, 0.18, 0.35);   // "dong"
+            } catch (err) {
+                console.error("No se pudo reproducir el sonido de notificación:", err);
+            }
+        }
+
         function iniciarListeners() {
 
             // Escucha la colección "Pedidos": guarda todo lo que no esté pagado,
@@ -341,6 +373,15 @@
                         });
                     }
                 });
+
+                // Suena solo cuando llega un pedido REALMENTE nuevo — no en la
+                // primera carga de la página (ahí "todos" se ven como "nuevos"
+                // aunque ya existieran de antes, y no queremos que suene por eso).
+                if (!primeraCargaPedidos) {
+                    const llegoAlgoNuevo = snapshot.docChanges().some(cambio => cambio.type === 'added');
+                    if (llegoAlgoNuevo) reproducirSonidoNuevoPedido();
+                }
+                primeraCargaPedidos = false;
 
                 actualizarEstadoVisualMesas();
                 renderizarPedidosGlobales();
@@ -381,14 +422,35 @@
 
         function renderizarSeccionDisponibilidad() {
             const container = document.getElementById("lista-disponibilidad");
+            const buscador = document.getElementById("buscador-platos");
+
+            // El buscador solo aparece cuando ya tienes bastantes platos como
+            // para que valga la pena buscar en vez de mirar toda la lista.
+            if (todosLosPlatos.length >= 25) {
+                buscador.classList.remove("hidden");
+            } else {
+                buscador.classList.add("hidden");
+                buscador.value = "";
+            }
+
             if (todosLosPlatos.length === 0) {
                 container.innerHTML = `<p class="text-gray-400 text-sm col-span-full text-center">No hay platos. Crea el primero con "Nuevo plato".</p>`;
                 return;
             }
 
+            const termino = buscador.value.trim().toLowerCase();
+            const platosFiltrados = termino
+                ? todosLosPlatos.filter(p => p.nombre.toLowerCase().includes(termino))
+                : todosLosPlatos;
+
+            if (platosFiltrados.length === 0) {
+                container.innerHTML = `<p class="text-gray-400 text-sm col-span-full text-center">Ningún plato coincide con "${buscador.value}".</p>`;
+                return;
+            }
+
             // Agrupa los platos por categoría (los que no tienen, van a "Sin categoría")
             const grupos = {};
-            todosLosPlatos.forEach(plato => {
+            platosFiltrados.forEach(plato => {
                 const cat = plato.categoria && plato.categoria.trim() ? plato.categoria.trim() : "Sin categoría";
                 if (!grupos[cat]) grupos[cat] = [];
                 grupos[cat].push(plato);

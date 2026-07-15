@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo — Panel de Control para Restaurantes y Foodtrucks</title>
+    <meta name="description" content="Mira cómo se gestiona un negocio de comida en tiempo real: mesas, pedidos de cocina, disponibilidad del menú y cobro con ticket, todo desde un panel simple.">
+    <meta property="og:title" content="Demo — Panel de Control para Restaurantes y Foodtrucks">
+    <meta property="og:description" content="Gestión de mesas, pedidos y cobro en tiempo real. Pruébalo gratis.">
+    <meta property="og:type" content="website">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @media print {
+            body * { visibility: hidden; }
+            #contenido-impresion, #contenido-impresion * { visibility: visible; }
+            #contenido-impresion { position: absolute; top: 0; left: 0; width: 80mm; padding: 8px; }
+            .no-imprimir { display: none !important; }
+        }
+    </style>
+</head>
+<body class="bg-gray-100 font-sans min-h-screen flex flex-col">
+
+    <div class="bg-gray-900 text-white text-center py-2 text-xs font-semibold no-imprimir">
+        ✨ Esto es una DEMO con datos de ejemplo — <a href="planes.html" class="underline text-indigo-300">Mira los planes para tener el tuyo</a>
+    </div>
+
+    <header class="bg-blue-600 text-white shadow-md p-4 flex justify-between items-center">
+        <h1 class="text-xl font-bold"><i class="fa-solid fa-utensils mr-2"></i>Panel de Control de Mesas (Demo)</h1>
+        <span class="bg-blue-700 px-3 py-1 rounded-full text-xs font-semibold">Datos de ejemplo</span>
+    </header>
+
+    <main class="flex-1 p-6 overflow-y-auto max-w-6xl w-full mx-auto">
+        <h2 class="text-lg font-semibold text-gray-700 mb-4">Estado de la Sala</h2>
+        <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4 mb-10" id="grid-mesas"></div>
+
+        <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 mb-8">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4"><i class="fa-solid fa-list-check text-orange-500 mr-2"></i>Pedidos de Mesa (Cocina)</h2>
+            <div id="lista-pedidos" class="space-y-2"></div>
+        </section>
+
+        <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-800 mb-4"><i class="fa-solid fa-sliders text-blue-500 mr-2"></i>Disponibilidad de la Carta</h2>
+            <div id="lista-platos" class="grid grid-cols-1 sm:grid-cols-2 gap-4"></div>
+        </section>
+    </main>
+
+    <!-- Modal ticket -->
+    <div id="modal-impresion" class="fixed inset-0 bg-black/50 z-[60] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-2xl max-w-xs w-full">
+            <div id="contenido-impresion" class="p-6 font-mono"></div>
+            <div class="p-4 border-t flex gap-2 no-imprimir">
+                <button onclick="window.print()" class="flex-1 bg-blue-600 text-white py-2 rounded-lg font-semibold text-sm"><i class="fa-solid fa-print mr-1"></i>Imprimir</button>
+                <button onclick="cerrarModal()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-semibold text-sm">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-5 py-3 rounded-full text-sm font-semibold opacity-0 pointer-events-none transition-all z-[70] no-imprimir">✅ Acción simulada</div>
+
+    <script>
+        // ============================================================
+        // DEMO — todo vive en memoria (JS), nada se conecta a Firebase.
+        // Al recargar la página, todo vuelve a su estado inicial.
+        // ============================================================
+        let mesas = [
+            { numero: 1, estado: 'vacia' },
+            { numero: 2, estado: 'pendiente' },
+            { numero: 3, estado: 'comiendo' },
+            { numero: 4, estado: 'vacia' },
+            { numero: 5, estado: 'pendiente' }
+        ];
+
+        let pedidos = [
+            { id: 'p1', mesa: 2, nombre: 'Hamburguesa Rincón', precio: 9.90, estado: 'pendiente' },
+            { id: 'p2', mesa: 2, nombre: 'Agua Natural', precio: 1.70, estado: 'pendiente' },
+            { id: 'p3', mesa: 3, nombre: 'Bocadillo de calamares', precio: 7.50, estado: 'entregado' },
+            { id: 'p4', mesa: 5, nombre: 'Croquetas caseras', precio: 6.00, estado: 'pendiente' }
+        ];
+
+        let platos = [
+            { id: 'd1', nombre: 'Hamburguesa Rincón', precio: 9.90, disponible: true },
+            { id: 'd2', nombre: 'Bocadillo de calamares', precio: 7.50, disponible: true },
+            { id: 'd3', nombre: 'Croquetas caseras', precio: 6.00, disponible: true },
+            { id: 'd4', nombre: 'Agua Natural', precio: 1.70, disponible: true },
+            { id: 'd5', nombre: 'Quesillo casero', precio: 3.50, disponible: false }
+        ];
+
+        function mostrarToast(texto) {
+            const toast = document.getElementById('toast');
+            toast.innerText = texto;
+            toast.style.opacity = '1';
+            setTimeout(() => toast.style.opacity = '0', 2000);
+        }
+
+        function actualizarEstadoMesa(numero) {
+            const pedidosMesa = pedidos.filter(p => p.mesa === numero && p.estado !== 'cancelado');
+            const mesa = mesas.find(m => m.numero === numero);
+            if (pedidosMesa.length === 0) {
+                mesa.estado = 'vacia';
+            } else if (pedidosMesa.some(p => p.estado === 'pendiente')) {
+                mesa.estado = 'pendiente';
+            } else {
+                mesa.estado = 'comiendo';
+            }
+        }
+
+        function renderizarMesas() {
+            const grid = document.getElementById('grid-mesas');
+            const estilos = {
+                vacia: { caja: 'bg-white border-gray-200 hover:border-blue-500', icono: 'bg-gray-100 text-gray-500', texto: 'text-gray-400', label: 'Vacía' },
+                pendiente: { caja: 'bg-amber-50/40 border-amber-400', icono: 'bg-amber-100 text-amber-600', texto: 'text-amber-600 font-semibold', label: 'Pendiente Entrega' },
+                comiendo: { caja: 'bg-green-50/30 border-green-500', icono: 'bg-green-100 text-green-600', texto: 'text-green-600 font-semibold', label: 'Comiendo' }
+            };
+
+            grid.innerHTML = mesas.map(mesa => {
+                const s = estilos[mesa.estado];
+                const badge = pedidos.filter(p => p.mesa === mesa.numero && p.estado !== 'cancelado').length;
+                return `
+                    <button onclick="mostrarToast('En la app real, esto abre el detalle de la Mesa ${mesa.numero}')" class="border-2 rounded-xl p-5 shadow-sm flex flex-col items-center justify-center relative ${s.caja}">
+                        <div class="w-12 h-12 rounded-full flex items-center justify-center ${s.icono}"><i class="fa-solid fa-chair text-xl"></i></div>
+                        <span class="font-bold text-gray-800 mt-2">Mesa ${mesa.numero}</span>
+                        <span class="text-xs mt-1 ${s.texto}">${s.label}</span>
+                        ${badge > 0 ? `<span class="absolute top-2 right-2 bg-amber-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center">${badge}</span>` : ''}
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function renderizarPedidos() {
+            const container = document.getElementById('lista-pedidos');
+            const pendientes = pedidos.filter(p => p.estado === 'pendiente');
+            if (pendientes.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 text-sm">No hay pedidos pendientes.</p>';
+                return;
+            }
+            container.innerHTML = pendientes.map(p => `
+                <div class="flex justify-between items-center bg-amber-50 p-3 rounded border border-amber-200">
+                    <div><span class="font-bold text-sm">Mesa ${p.mesa}</span>: <span class="text-sm">${p.nombre}</span></div>
+                    <div class="flex gap-2">
+                        <button onclick="cambiarEstadoPedido('${p.id}', 'entregado')" class="bg-green-600 text-white px-3 py-1 text-xs rounded shadow">Servir</button>
+                        <button onclick="cambiarEstadoPedido('${p.id}', 'cancelado')" class="bg-red-500 text-white px-3 py-1 text-xs rounded shadow">Cancelar</button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function cambiarEstadoPedido(id, nuevoEstado) {
+            const pedido = pedidos.find(p => p.id === id);
+            pedido.estado = nuevoEstado;
+            actualizarEstadoMesa(pedido.mesa);
+            renderizarTodo();
+            mostrarToast(nuevoEstado === 'entregado' ? '✅ Marcado como servido' : '❌ Pedido cancelado');
+        }
+
+        function renderizarPlatos() {
+            const container = document.getElementById('lista-platos');
+            container.innerHTML = platos.map(plato => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <div>
+                        <p class="font-semibold text-gray-800 text-sm">${plato.nombre}</p>
+                        <p class="text-xs text-blue-600 font-bold">${plato.precio.toFixed(2)}€</p>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                        <input type="checkbox" class="sr-only peer" ${plato.disponible ? 'checked' : ''} onchange="togglePlato('${plato.id}')">
+                        <div class="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500"></div>
+                    </label>
+                </div>
+            `).join('');
+        }
+
+        function togglePlato(id) {
+            const plato = platos.find(p => p.id === id);
+            plato.disponible = !plato.disponible;
+            renderizarPlatos();
+            mostrarToast(plato.disponible ? '✅ Marcado como disponible' : '⛔ Marcado como agotado');
+        }
+
+        function renderizarTodo() {
+            renderizarMesas();
+            renderizarPedidos();
+            renderizarPlatos();
+        }
+
+        function cerrarModal() {
+            const modal = document.getElementById('modal-impresion');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        // Ejemplo de ticket, disparado desde consola o botón futuro — muestra
+        // cómo se ve el recibo imprimible con QR de factura en la app real.
+        function mostrarTicketDemo() {
+            document.getElementById('contenido-impresion').innerHTML = `
+                <div class="text-center mb-3">
+                    <p class="font-bold text-base">🚚 Tu Negocio</p>
+                    <p class="text-[10px] text-gray-500">Mesa 3 — Demo</p>
+                </div>
+                <div class="border-t border-b border-dashed py-2 my-2 text-xs">
+                    <div class="flex justify-between"><span>Bocadillo de calamares</span><span>7.50€</span></div>
+                </div>
+                <div class="flex justify-between font-bold text-base mt-2">
+                    <span>TOTAL</span><span>7.50€</span>
+                </div>
+                <p class="text-center text-[10px] text-gray-400 mt-4">(En la app real, aquí va el QR de factura)</p>
+            `;
+            const modal = document.getElementById('modal-impresion');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        renderizarTodo();
+    </script>
+</body>
+</html>

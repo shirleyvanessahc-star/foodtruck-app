@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demo — Carta Digital</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background-color: #fafafa; margin: 0; padding: 0; padding-bottom: 40px; }
+
+        .banner-demo { background: #222; color: #fff; text-align: center; padding: 8px; font-size: 12px; font-weight: 600; }
+        .banner-demo a { color: #7dd3fc; }
+
+        .header { background-color: #ff5722; color: white; text-align: center; padding: 30px 20px; }
+        .header h1 { margin: 0; font-size: 26px; }
+        .mesa-tag { background: #333; color: white; display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 14px; margin-top: 10px; }
+
+        .menu-container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
+        .categoria-titulo { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #999; margin: 24px 0 10px 4px; }
+        .categoria-titulo:first-child { margin-top: 0; }
+
+        .plato-card { background: white; border-radius: 12px; padding: 15px; margin-bottom: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); display: flex; justify-content: space-between; align-items: center; }
+        .plato-info h3 { margin: 0 0 5px 0; color: #222; font-size: 17px; }
+        .plato-info p { margin: 0; color: #ff5722; font-weight: bold; font-size: 16px; }
+        .btn-ordenar { background-color: #4CAF50; color: white; border: none; padding: 10px 18px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; flex-shrink: 0; margin-left: 10px; }
+        .btn-ordenar:active { transform: scale(0.95); }
+
+        .modal-fondo { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-end; justify-content: center; z-index: 100; }
+        .modal-fondo.activo { display: flex; }
+        .modal-caja { background: white; border-radius: 20px 20px 0 0; padding: 24px 20px 30px; width: 100%; max-width: 500px; }
+        .modal-caja h2 { margin: 0 0 4px; font-size: 19px; color: #222; }
+        .modal-caja p { margin: 0 0 20px; color: #777; font-size: 14px; }
+        .modal-botones { display: flex; gap: 10px; }
+        .modal-botones button { flex: 1; padding: 13px; border-radius: 12px; border: none; font-weight: bold; font-size: 15px; cursor: pointer; }
+        .btn-confirmar { background: #4CAF50; color: white; }
+        .btn-cancelar { background: #eee; color: #555; }
+
+        .toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(100px); background: #222; color: white; padding: 14px 22px; border-radius: 30px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 16px rgba(0,0,0,0.2); z-index: 200; opacity: 0; transition: all 0.3s ease; text-align: center; max-width: 85%; }
+        .toast.mostrar { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+        .cta-final { max-width: 500px; margin: 30px auto; padding: 0 15px; text-align: center; }
+        .cta-final a { display: inline-block; background: #4f46e5; color: white; padding: 14px 28px; border-radius: 30px; text-decoration: none; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="banner-demo">
+    ✨ Esto es una DEMO — <a href="planes.html">Mira los planes para tener la tuya</a>
+</div>
+
+<div class="header">
+    <h1>El Rincón de Ana</h1>
+    <div class="mesa-tag">Mesa: 4</div>
+</div>
+
+<div id="menu-clientes" class="menu-container"></div>
+
+<div class="cta-final">
+    <p style="color:#777; font-size: 14px; margin-bottom: 14px;">¿Te imaginas esto con el menú de tu propio negocio?</p>
+    <a href="planes.html">Quiero la mía</a>
+</div>
+
+<!-- Modal de confirmación -->
+<div id="modal-confirmar" class="modal-fondo">
+    <div class="modal-caja">
+        <h2 id="modal-nombre-plato">Plato</h2>
+        <p id="modal-detalle">¿Confirmas el pedido?</p>
+        <div class="modal-botones">
+            <button class="btn-cancelar" onclick="cerrarModal()">Cancelar</button>
+            <button class="btn-confirmar" onclick="confirmarPedidoDemo()">Confirmar pedido</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast" class="toast">✅ Pedido enviado a cocina</div>
+
+<script>
+    // ============================================================
+    // DEMO — datos de muestra "quemados" en el código, sin conexión
+    // a Firebase real. Ningún pedido aquí toca tu base de datos ni
+    // tu panel de verdad; es solo para mostrar cómo se ve y se siente.
+    // ============================================================
+    const MENU_DEMO = {
+        "Entrantes": [
+            { nombre: "Papas arrugadas con mojo", precio: 4.50 },
+            { nombre: "Croquetas caseras (6 uds)", precio: 6.00 },
+            { nombre: "Ensalada mixta", precio: 5.50 }
+        ],
+        "Principales": [
+            { nombre: "Hamburguesa Rincón", precio: 9.90 },
+            { nombre: "Bocadillo de calamares", precio: 7.50 },
+            { nombre: "Wrap de pollo crujiente", precio: 8.20 }
+        ],
+        "Bebidas": [
+            { nombre: "Agua Natural", precio: 1.70 },
+            { nombre: "Refresco", precio: 2.20 },
+            { nombre: "Cerveza", precio: 2.80 }
+        ],
+        "Postres": [
+            { nombre: "Quesillo casero", precio: 3.50 },
+            { nombre: "Helado artesanal", precio: 3.80 }
+        ]
+    };
+
+    const contenedorMenu = document.getElementById('menu-clientes');
+    let platoSeleccionado = null;
+
+    function pintarMenu() {
+        contenedorMenu.innerHTML = '';
+        Object.keys(MENU_DEMO).forEach(categoria => {
+            const titulo = document.createElement('h2');
+            titulo.className = 'categoria-titulo';
+            titulo.innerText = categoria;
+            contenedorMenu.appendChild(titulo);
+
+            MENU_DEMO[categoria].forEach(plato => {
+                const card = document.createElement('div');
+                card.className = 'plato-card';
+                card.innerHTML = `
+                    <div class="plato-info">
+                        <h3>${plato.nombre}</h3>
+                        <p>${plato.precio.toFixed(2)} €</p>
+                    </div>
+                    <button class="btn-ordenar">Pedir</button>
+                `;
+                card.querySelector('.btn-ordenar').addEventListener('click', () => abrirModal(plato));
+                contenedorMenu.appendChild(card);
+            });
+        });
+    }
+
+    function abrirModal(plato) {
+        platoSeleccionado = plato;
+        document.getElementById('modal-nombre-plato').innerText = plato.nombre;
+        document.getElementById('modal-detalle').innerText = `${plato.precio.toFixed(2)}€ — Mesa 4 (demo)`;
+        document.getElementById('modal-confirmar').classList.add('activo');
+    }
+
+    function cerrarModal() {
+        document.getElementById('modal-confirmar').classList.remove('activo');
+    }
+
+    function confirmarPedidoDemo() {
+        cerrarModal();
+        mostrarToast(`✅ ${platoSeleccionado.nombre} enviado a cocina (simulado)`);
+    }
+
+    function mostrarToast(texto) {
+        const toast = document.getElementById('toast');
+        toast.innerText = texto;
+        toast.classList.add('mostrar');
+        setTimeout(() => toast.classList.remove('mostrar'), 2500);
+    }
+
+    pintarMenu();
+</script>
+</body>
+</html>

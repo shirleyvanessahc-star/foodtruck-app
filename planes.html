@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nuestros Planes</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 font-sans min-h-screen">
+
+    <header class="bg-indigo-600 text-white text-center py-12 px-4">
+        <h1 class="text-3xl font-black">Nuestros Productos y Planes</h1>
+        <p class="text-indigo-100 mt-2">Elige el que mejor se adapte a tu negocio</p>
+    </header>
+
+    <main id="contenedor-productos" class="max-w-5xl mx-auto px-4 py-10 space-y-14">
+        <p class="text-center text-gray-400">Cargando planes disponibles...</p>
+    </main>
+
+    <footer class="text-center text-xs text-gray-400 py-8">
+        ¿Tienes preguntas? Escríbenos a <a href="mailto:superadministrador0@gmail.com" class="text-indigo-500 underline">superadministrador0@gmail.com</a>
+    </footer>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script>
+        /* =========================================================
+           1. ENCABEZADO
+        ========================================================= */
+        const firebaseConfig = {
+            apiKey: "AIzaSyCnRsS7_ayjN2FRzxphu4VpQGZmziEQRY4",
+            authDomain: "mi-carta-digital-a4c27.firebaseapp.com",
+            projectId: "mi-carta-digital-a4c27",
+            storageBucket: "mi-carta-digital-a4c27.firebasestorage.app",
+            messagingSenderId: "387737254613",
+            appId: "1:387737254613:web:dc87f0cebbcec425bac05c",
+            measurementId: "G-F7CR2WVD9M"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // ⚠️ RELLENAR: tu usuario de PayPal.me (por ejemplo, si tu link es
+        // paypal.me/ShirleyNegocios, pon aquí solo "ShirleyNegocios")
+        const PAYPAL_USUARIO = "shirleyhernandez499";
+        const CORREO_SOPORTE = "superadministrador0@gmail.com";
+
+        let productos = [];
+        let planes = [];
+
+        /* =========================================================
+           2. CARGA DE DATOS (en vivo, desde el SuperAdmin)
+        ========================================================= */
+        async function cargarPlanes() {
+            const [snapProductos, snapPlanes] = await Promise.all([
+                db.collection("SuperAdmin_Productos").get(),
+                db.collection("SuperAdmin_Planes").get()
+            ]);
+            productos = snapProductos.docs.map(d => ({ id: d.id, ...d.data() }));
+            planes = snapPlanes.docs.map(d => ({ id: d.id, ...d.data() }));
+            renderizar();
+        }
+
+        function renderizar() {
+            const contenedor = document.getElementById("contenedor-productos");
+            if (productos.length === 0) {
+                contenedor.innerHTML = '<p class="text-center text-gray-400">Todavía no hay productos publicados.</p>';
+                return;
+            }
+
+            contenedor.innerHTML = productos.map(producto => {
+                const planesDelProducto = planes.filter(p => p.productoId === producto.id)
+                    .sort((a, b) => a.precio - b.precio);
+
+                if (planesDelProducto.length === 0) return '';
+
+                const tarjetas = planesDelProducto.map((plan, i) => {
+                    const destacado = i === 1; // el del medio (normalmente "Pro") resaltado
+                    const linkPago = `https://paypal.me/${PAYPAL_USUARIO}/${plan.precio}EUR`;
+                    const asunto = encodeURIComponent(`Interesado en ${producto.nombre} — Plan ${plan.nombre}`);
+                    const cuerpo = encodeURIComponent(
+                        `Hola,\n\nMe interesa contratar:\n\nProducto: ${producto.nombre}\nPlan: ${plan.nombre} (${plan.precio}€/mes)\n\nMis datos:\nNombre del negocio:\nTeléfono/email de contacto:\n\nGracias.`
+                    );
+                    const linkCorreo = `mailto:${CORREO_SOPORTE}?subject=${asunto}&body=${cuerpo}`;
+
+                    return `
+                        <div class="rounded-2xl p-6 flex flex-col ${destacado ? 'bg-indigo-600 text-white shadow-xl scale-105' : 'bg-white border border-gray-200 shadow-sm'}">
+                            <h3 class="font-bold text-lg">${plan.nombre}</h3>
+                            <p class="text-3xl font-black mt-2">${parseFloat(plan.precio).toFixed(0)}€<span class="text-sm font-normal opacity-70">/mes</span></p>
+                            <p class="${destacado ? 'text-indigo-100' : 'text-gray-500'} text-sm mt-3 flex-1">${plan.descripcion || ''}</p>
+                            <a href="${linkCorreo}" class="block text-center font-semibold py-2.5 rounded-xl mt-5 transition-colors ${destacado ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-indigo-600 text-white hover:bg-indigo-700'}">
+                                Quiero este plan
+                            </a>
+                            <a href="${linkPago}" target="_blank" class="block text-center text-xs mt-2 underline ${destacado ? 'text-indigo-100' : 'text-gray-400'}">
+                                Pagar con PayPal
+                            </a>
+                        </div>
+                    `;
+                }).join('');
+
+                return `
+                    <div>
+                        <div class="text-center mb-6">
+                            <h2 class="text-2xl font-bold text-gray-800">${producto.nombre}</h2>
+                            <p class="text-gray-500 text-sm mt-1">${producto.descripcion || ''}</p>
+                        </div>
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-5 max-w-4xl mx-auto">
+                            ${tarjetas}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        cargarPlanes();
+    </script>
+</body>
+</html>

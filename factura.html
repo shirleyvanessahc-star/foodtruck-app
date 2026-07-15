@@ -197,6 +197,7 @@
                     cliente: datosCliente,
                     total: ticketData.total,
                     platos: ticketData.platos,
+                    ubicacionId: ticketData.ubicacionId || 'principal',
                     fecha: firebase.firestore.FieldValue.serverTimestamp()
                 });
 

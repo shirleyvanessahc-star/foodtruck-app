@@ -98,6 +98,15 @@
 
     let platoSeleccionado = null;
 
+    // ⚙️ La ubicación viene en la URL, ej: cliente.html?ubicacion=abc123
+    // Si no viene ninguna (negocios de una sola ubicación), usa "principal".
+    const parametros = new URLSearchParams(window.location.search);
+    const UBICACION_ACTUAL = parametros.get('ubicacion') || 'principal';
+
+    function esDeEstaUbicacion(item) {
+        return (item.ubicacionId || 'principal') === UBICACION_ACTUAL;
+    }
+
     // Cargar todos los platos disponibles en tiempo real, agrupados por categoría
     onSnapshot(collection(db, "Platos"), (snapshot) => {
         contenedorMenu.innerHTML = '';
@@ -106,6 +115,7 @@
         snapshot.forEach((docSnap) => {
             const plato = { id: docSnap.id, ...docSnap.data() };
             if (plato.disponible !== true) return;
+            if (!esDeEstaUbicacion(plato)) return;
             const cat = plato.categoria && plato.categoria.trim() ? plato.categoria.trim() : "Menú";
             if (!grupos[cat]) grupos[cat] = [];
             grupos[cat].push(plato);
@@ -181,7 +191,8 @@
                 precio: platoSeleccionado.precio,
                 mesa: parseInt(mesaActual),
                 hora: serverTimestamp(),
-                estado: "pendiente"
+                estado: "pendiente",
+                ubicacionId: UBICACION_ACTUAL
             });
             cerrarModal();
             mostrarToast(`✅ ${platoSeleccionado.nombre} enviado a cocina`);

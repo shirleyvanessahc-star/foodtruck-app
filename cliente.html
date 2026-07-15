@@ -46,13 +46,7 @@
     <h1>Nuestro Menú Digital</h1>
     <div class="mesa-tag">
         Mesa:
-        <select id="num-mesa" style="background: #333; color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;">
-            <option value="1">Mesa 1</option>
-            <option value="2">Mesa 2</option>
-            <option value="3" selected>Mesa 3</option>
-            <option value="4">Mesa 4</option>
-            <option value="5">Mesa 5</option>
-        </select>
+        <select id="num-mesa" style="background: #333; color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;"></select>
     </div>
 </div>
 
@@ -89,6 +83,18 @@
     const app = initializeApp(firebaseConfig);
     const db = getFirestore(app);
     const contenedorMenu = document.getElementById('menu-clientes');
+
+    // ⚙️ Único lugar que hay que tocar para cambiar cuántas mesas
+    // tiene este negocio (según el plan que haya contratado).
+    const NUMERO_MESAS = 5;
+    const selectMesa = document.getElementById('num-mesa');
+    for (let i = 1; i <= NUMERO_MESAS; i++) {
+        const opcion = document.createElement('option');
+        opcion.value = i;
+        opcion.innerText = `Mesa ${i}`;
+        if (i === Math.min(3, NUMERO_MESAS)) opcion.selected = true;
+        selectMesa.appendChild(opcion);
+    }
 
     let platoSeleccionado = null;
 

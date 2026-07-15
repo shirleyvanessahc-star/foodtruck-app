@@ -12,7 +12,15 @@
         .header { background-color: var(--color-principal); color: white; text-align: center; padding: 30px 20px; }
         .header h1 { margin: 0; font-size: 26px; }
         .header img.logo-marca { max-height: 60px; margin-bottom: 10px; }
-        .mesa-tag { background: #333; color: white; display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 14px; margin-top: 10px; }
+        .mesa-label { font-size: 13px; opacity: 0.85; margin-top: 12px; margin-bottom: 10px; }
+        .grid-mesas-cliente { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 340px; margin: 0 auto; }
+        .cuadro-mesa {
+            width: 52px; height: 52px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.5);
+            background: rgba(255,255,255,0.12); color: white; font-weight: 700; font-size: 15px;
+            cursor: pointer; transition: all 0.15s ease;
+        }
+        .cuadro-mesa:active { transform: scale(0.93); }
+        .cuadro-mesa.activa { background: white; border-color: white; color: var(--color-principal); }
 
         .menu-container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
 
@@ -46,10 +54,8 @@
 
 <div class="header" id="header-negocio">
     <h1 id="titulo-negocio">Nuestro Menú Digital</h1>
-    <div class="mesa-tag">
-        Mesa:
-        <select id="num-mesa" style="background: #333; color: white; border: none; font-size: 14px; font-weight: bold; cursor: pointer;"></select>
-    </div>
+    <p class="mesa-label">Selecciona tu mesa</p>
+    <div id="grid-mesas-cliente" class="grid-mesas-cliente"></div>
 </div>
 
 <div id="menu-clientes" class="menu-container"></div>
@@ -89,13 +95,22 @@
     // ⚙️ Único lugar que hay que tocar para cambiar cuántas mesas
     // tiene este negocio (según el plan que haya contratado).
     const NUMERO_MESAS = 5;
-    const selectMesa = document.getElementById('num-mesa');
+    let mesaElegida = Math.min(3, NUMERO_MESAS);
+
+    const gridMesas = document.getElementById('grid-mesas-cliente');
     for (let i = 1; i <= NUMERO_MESAS; i++) {
-        const opcion = document.createElement('option');
-        opcion.value = i;
-        opcion.innerText = `Mesa ${i}`;
-        if (i === Math.min(3, NUMERO_MESAS)) opcion.selected = true;
-        selectMesa.appendChild(opcion);
+        const cuadro = document.createElement('button');
+        cuadro.className = 'cuadro-mesa' + (i === mesaElegida ? ' activa' : '');
+        cuadro.innerText = i;
+        cuadro.id = `cuadro-mesa-${i}`;
+        cuadro.addEventListener('click', () => seleccionarMesaCliente(i));
+        gridMesas.appendChild(cuadro);
+    }
+
+    function seleccionarMesaCliente(numero) {
+        document.getElementById(`cuadro-mesa-${mesaElegida}`).classList.remove('activa');
+        mesaElegida = numero;
+        document.getElementById(`cuadro-mesa-${mesaElegida}`).classList.add('activa');
     }
 
     let platoSeleccionado = null;
@@ -185,7 +200,7 @@
 
     function abrirModal(plato) {
         platoSeleccionado = plato;
-        const mesaActual = document.getElementById('num-mesa').value;
+        const mesaActual = mesaElegida;
         document.getElementById('modal-nombre-plato').innerText = plato.nombre;
         document.getElementById('modal-detalle').innerText = `${parseFloat(plato.precio).toFixed(2)}€ — Mesa ${mesaActual}`;
         document.getElementById('modal-confirmar').classList.add('activo');
@@ -206,7 +221,7 @@
 
     document.getElementById('btn-confirmar-pedido').addEventListener('click', async () => {
         if (!platoSeleccionado) return;
-        const mesaActual = document.getElementById('num-mesa').value;
+        const mesaActual = mesaElegida;
         const boton = document.getElementById('btn-confirmar-pedido');
         boton.disabled = true;
         boton.innerText = "Enviando...";

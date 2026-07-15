@@ -158,6 +158,40 @@
 
                 <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
                     <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                        <h2 class="text-lg font-semibold text-gray-800"><i class="fa-solid fa-chart-line text-purple-500 mr-2"></i>Estadísticas de Ventas</h2>
+                        <div class="flex items-center gap-2">
+                            <input type="month" id="filtro-mes-estadisticas" onchange="renderizarEstadisticas()" class="border border-gray-300 rounded-lg p-1.5 text-xs">
+                            <button onclick="verTodoElTiempoEstadisticas()" class="text-xs text-blue-600 hover:underline whitespace-nowrap">Ver todo</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Tickets</p>
+                            <p id="stat-num-tickets" class="text-xl font-black text-gray-800">0</p>
+                        </div>
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Total facturado</p>
+                            <p id="stat-total-facturado" class="text-xl font-black text-green-600">0€</p>
+                        </div>
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Ticket promedio</p>
+                            <p id="stat-ticket-promedio" class="text-xl font-black text-gray-800">0€</p>
+                        </div>
+                        <div class="bg-gray-50 border border-gray-200 rounded-lg p-3 text-center">
+                            <p class="text-[10px] text-gray-400 uppercase font-semibold">Hora pico</p>
+                            <p id="stat-hora-pico" class="text-xl font-black text-gray-800">—</p>
+                        </div>
+                    </div>
+
+                    <p class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Platos más vendidos</p>
+                    <div id="lista-top-platos" class="space-y-1.5">
+                        <p class="text-gray-400 text-sm">Cargando...</p>
+                    </div>
+                </section>
+
+                <section class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 lg:col-span-2">
+                    <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
                         <h2 class="text-lg font-semibold text-gray-800"><i class="fa-solid fa-file-invoice text-emerald-500 mr-2"></i>Historial de Facturas</h2>
                         <input type="month" id="filtro-mes-facturas" onchange="renderizarHistorialFacturas()" class="border border-gray-300 rounded-lg p-1.5 text-xs">
                     </div>
@@ -322,6 +356,7 @@
         let ticketsDelDia = [];
         let historialCierres = [];
         let todasLasFacturas = [];
+        let todosLosTicketsHistorico = [];
 
         /* =========================================================
            1B. AUTENTICACIÓN
@@ -433,6 +468,7 @@
                 renderizarTicketsYTotales();
                 renderizarHistorialCierres();
                 renderizarHistorialFacturas();
+                renderizarEstadisticas();
             });
 
             // Escucha la colección "Pedidos": guarda todo lo que no esté pagado,
@@ -501,6 +537,15 @@
                 snapshot.forEach(doc => { todasLasFacturas.push({ id: doc.id, ...doc.data() }); });
                 renderizarHistorialFacturas();
             });
+
+            // Escucha TODOS los tickets históricos (abiertos y ya cerrados) para
+            // calcular estadísticas de ventas — a diferencia del listener de arriba,
+            // este no filtra por "cerrado", porque necesita el histórico completo.
+            db.collection("Tickets").orderBy("fecha", "desc").limit(500).onSnapshot((snapshot) => {
+                todosLosTicketsHistorico = [];
+                snapshot.forEach(doc => { todosLosTicketsHistorico.push({ id: doc.id, ...doc.data() }); });
+                renderizarEstadisticas();
+            });
         }
 
         /* =========================================================
@@ -528,6 +573,7 @@
             renderizarTicketsYTotales();
             renderizarHistorialCierres();
             renderizarHistorialFacturas();
+            renderizarEstadisticas();
         }
 
         function abrirModalUbicacion() {
@@ -1190,6 +1236,79 @@
                     </tr>
                 `;
             }).join('');
+        }
+
+        // Deja vacío el filtro de mes para ver las estadísticas de TODO el histórico
+        function verTodoElTiempoEstadisticas() {
+            document.getElementById("filtro-mes-estadisticas").value = "";
+            renderizarEstadisticas();
+        }
+
+        // Calcula y pinta plato más vendido, hora pico, ticket promedio y total
+        // facturado — a partir de los tickets ya cobrados (abiertos o cerrados),
+        // respetando la ubicación actual y el mes elegido (o todo el histórico).
+        function renderizarEstadisticas() {
+            const inputMes = document.getElementById("filtro-mes-estadisticas").value; // "" = todo el histórico
+
+            const ticketsFiltrados = todosLosTicketsHistorico.filter(t => {
+                if (!esDeUbicacionActual(t)) return false;
+                if (!inputMes) return true; // sin filtro de mes = todo el histórico
+                if (!t.fecha || !t.fecha.toDate) return false;
+                const [anioFiltro, mesFiltro] = inputMes.split('-').map(Number);
+                const fecha = t.fecha.toDate();
+                return fecha.getFullYear() === anioFiltro && (fecha.getMonth() + 1) === mesFiltro;
+            });
+
+            const numTickets = ticketsFiltrados.length;
+            const totalFacturado = ticketsFiltrados.reduce((sum, t) => sum + (t.total || 0), 0);
+            const ticketPromedio = numTickets > 0 ? totalFacturado / numTickets : 0;
+
+            document.getElementById("stat-num-tickets").innerText = numTickets;
+            document.getElementById("stat-total-facturado").innerText = totalFacturado.toFixed(0) + "€";
+            document.getElementById("stat-ticket-promedio").innerText = ticketPromedio.toFixed(2) + "€";
+
+            if (numTickets === 0) {
+                document.getElementById("stat-hora-pico").innerText = "—";
+                document.getElementById("lista-top-platos").innerHTML = '<p class="text-gray-400 text-sm">Todavía no hay ventas en este periodo.</p>';
+                return;
+            }
+
+            // Hora pico: en qué hora del día caen más tickets
+            const conteoHoras = {};
+            ticketsFiltrados.forEach(t => {
+                if (!t.fecha || !t.fecha.toDate) return;
+                const hora = t.fecha.toDate().getHours();
+                conteoHoras[hora] = (conteoHoras[hora] || 0) + 1;
+            });
+            const horaPico = Object.keys(conteoHoras).sort((a, b) => conteoHoras[b] - conteoHoras[a])[0];
+            document.getElementById("stat-hora-pico").innerText = horaPico !== undefined
+                ? `${horaPico}:00 - ${parseInt(horaPico) + 1}:00`
+                : "—";
+
+            // Platos más vendidos: cuenta cuántas veces aparece cada nombre
+            // dentro de los desgloses de todos los tickets filtrados.
+            const conteoPlatos = {};
+            ticketsFiltrados.forEach(t => {
+                (t.platos || []).forEach(p => {
+                    conteoPlatos[p.nombre] = (conteoPlatos[p.nombre] || 0) + 1;
+                });
+            });
+
+            const top5 = Object.entries(conteoPlatos)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 5);
+
+            const maxCantidad = top5.length > 0 ? top5[0][1] : 1;
+
+            document.getElementById("lista-top-platos").innerHTML = top5.map(([nombre, cantidad]) => `
+                <div class="flex items-center gap-3 text-sm">
+                    <span class="text-gray-600 w-32 truncate">${nombre}</span>
+                    <div class="flex-1 bg-gray-100 rounded-full h-4 overflow-hidden">
+                        <div class="bg-purple-500 h-full rounded-full" style="width: ${(cantidad / maxCantidad) * 100}%"></div>
+                    </div>
+                    <span class="text-gray-800 font-bold w-8 text-right">${cantidad}</span>
+                </div>
+            `).join('');
         }
         /* ===================== FINAL DEL SCRIPT ===================== */
     </script>

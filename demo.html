@@ -17,7 +17,15 @@
 
         .header { background-color: #ff5722; color: white; text-align: center; padding: 30px 20px; }
         .header h1 { margin: 0; font-size: 26px; }
-        .mesa-tag { background: #333; color: white; display: inline-block; padding: 5px 15px; border-radius: 20px; font-size: 14px; margin-top: 10px; }
+        .mesa-label { font-size: 13px; opacity: 0.85; margin-top: 12px; margin-bottom: 10px; }
+        .grid-mesas-cliente { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; max-width: 340px; margin: 0 auto; }
+        .cuadro-mesa {
+            width: 52px; height: 52px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.5);
+            background: rgba(255,255,255,0.12); color: white; font-weight: 700; font-size: 15px;
+            cursor: pointer; transition: all 0.15s ease;
+        }
+        .cuadro-mesa:active { transform: scale(0.93); }
+        .cuadro-mesa.activa { background: white; border-color: white; color: #ff5722; }
 
         .menu-container { max-width: 500px; margin: 20px auto; padding: 0 15px; }
         .categoria-titulo { font-size: 13px; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; color: #999; margin: 24px 0 10px 4px; }
@@ -54,7 +62,8 @@
 
 <div class="header">
     <h1>El Rincón de Ana</h1>
-    <div class="mesa-tag">Mesa: 4</div>
+    <p class="mesa-label">Selecciona tu mesa</p>
+    <div id="grid-mesas-cliente" class="grid-mesas-cliente"></div>
 </div>
 
 <div id="menu-clientes" class="menu-container"></div>
@@ -110,6 +119,25 @@
     const contenedorMenu = document.getElementById('menu-clientes');
     let platoSeleccionado = null;
 
+    // Igual que en la app real: 5 mesas de ejemplo, tocables
+    const NUMERO_MESAS_DEMO = 5;
+    let mesaElegida = 3;
+    const gridMesas = document.getElementById('grid-mesas-cliente');
+    for (let i = 1; i <= NUMERO_MESAS_DEMO; i++) {
+        const cuadro = document.createElement('button');
+        cuadro.className = 'cuadro-mesa' + (i === mesaElegida ? ' activa' : '');
+        cuadro.innerText = i;
+        cuadro.id = `cuadro-mesa-${i}`;
+        cuadro.addEventListener('click', () => seleccionarMesaCliente(i));
+        gridMesas.appendChild(cuadro);
+    }
+
+    function seleccionarMesaCliente(numero) {
+        document.getElementById(`cuadro-mesa-${mesaElegida}`).classList.remove('activa');
+        mesaElegida = numero;
+        document.getElementById(`cuadro-mesa-${mesaElegida}`).classList.add('activa');
+    }
+
     function pintarMenu() {
         contenedorMenu.innerHTML = '';
         Object.keys(MENU_DEMO).forEach(categoria => {
@@ -137,7 +165,7 @@
     function abrirModal(plato) {
         platoSeleccionado = plato;
         document.getElementById('modal-nombre-plato').innerText = plato.nombre;
-        document.getElementById('modal-detalle').innerText = `${plato.precio.toFixed(2)}€ — Mesa 4 (demo)`;
+        document.getElementById('modal-detalle').innerText = `${plato.precio.toFixed(2)}€ — Mesa ${mesaElegida} (demo)`;
         document.getElementById('modal-confirmar').classList.add('activo');
     }
 

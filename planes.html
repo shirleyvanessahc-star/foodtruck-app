@@ -22,6 +22,35 @@
         <p class="text-center text-gray-400">Cargando planes disponibles...</p>
     </main>
 
+    <!-- Modal: resumen del plan elegido -->
+    <div id="modal-resumen" class="fixed inset-0 bg-black/50 z-[60] hidden items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+            <h3 class="font-bold text-gray-800 text-lg mb-1">Resumen de tu plan</h3>
+            <div class="bg-indigo-50 rounded-xl p-4 my-4">
+                <p id="resumen-producto" class="text-sm text-gray-500"></p>
+                <p id="resumen-plan" class="text-xl font-black text-indigo-700"></p>
+                <p id="resumen-precio" class="text-2xl font-black text-gray-800 mt-1"></p>
+            </div>
+
+            <a id="btn-paypal" href="#" target="_blank" class="block text-center bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-xl mb-3">
+                <i class="fa-brands fa-paypal mr-1"></i> Pagar con PayPal
+            </a>
+
+            <p class="text-xs text-gray-400 text-center mb-2">¿Prefieres que te contactemos primero?</p>
+            <div class="flex gap-2">
+                <a id="btn-correo" href="#" class="flex-1 text-center border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-xl text-sm">
+                    <i class="fa-solid fa-envelope mr-1"></i> Enviar correo
+                </a>
+                <button onclick="copiarMensaje()" class="flex-1 text-center border border-gray-300 hover:bg-gray-50 text-gray-700 font-semibold py-2.5 rounded-xl text-sm">
+                    <i class="fa-solid fa-copy mr-1"></i> Copiar mensaje
+                </button>
+            </div>
+            <p id="aviso-copiado" class="hidden text-green-600 text-xs text-center mt-2">✅ Mensaje copiado — pégalo en WhatsApp, correo, donde prefieras.</p>
+
+            <button onclick="cerrarModalResumen()" class="w-full text-center text-gray-400 text-xs mt-4 hover:underline">Cerrar</button>
+        </div>
+    </div>
+
     <footer class="text-center text-xs text-gray-400 py-8">
         ¿Tienes preguntas? Escríbenos a <a href="mailto:superadministrador0@gmail.com" class="text-indigo-500 underline">superadministrador0@gmail.com</a>
     </footer>
@@ -80,24 +109,15 @@
 
                 const tarjetas = planesDelProducto.map((plan, i) => {
                     const destacado = i === 1; // el del medio (normalmente "Pro") resaltado
-                    const linkPago = `https://paypal.me/${PAYPAL_USUARIO}/${plan.precio}EUR`;
-                    const asunto = encodeURIComponent(`Interesado en ${producto.nombre} — Plan ${plan.nombre}`);
-                    const cuerpo = encodeURIComponent(
-                        `Hola,\n\nMe interesa contratar:\n\nProducto: ${producto.nombre}\nPlan: ${plan.nombre} (${plan.precio}€/mes)\n\nMis datos:\nNombre del negocio:\nTeléfono/email de contacto:\n\nGracias.`
-                    );
-                    const linkCorreo = `mailto:${CORREO_SOPORTE}?subject=${asunto}&body=${cuerpo}`;
 
                     return `
                         <div class="rounded-2xl p-6 flex flex-col ${destacado ? 'bg-indigo-600 text-white shadow-xl scale-105' : 'bg-white border border-gray-200 shadow-sm'}">
                             <h3 class="font-bold text-lg">${plan.nombre}</h3>
                             <p class="text-3xl font-black mt-2">${parseFloat(plan.precio).toFixed(0)}€<span class="text-sm font-normal opacity-70">/mes</span></p>
                             <p class="${destacado ? 'text-indigo-100' : 'text-gray-500'} text-sm mt-3 flex-1">${plan.descripcion || ''}</p>
-                            <a href="${linkCorreo}" class="block text-center font-semibold py-2.5 rounded-xl mt-5 transition-colors ${destacado ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-indigo-600 text-white hover:bg-indigo-700'}">
+                            <button onclick='abrirResumenPlan(${JSON.stringify(producto.nombre)}, ${JSON.stringify(plan.nombre)}, ${plan.precio})' class="block w-full text-center font-semibold py-2.5 rounded-xl mt-5 transition-colors ${destacado ? 'bg-white text-indigo-600 hover:bg-indigo-50' : 'bg-indigo-600 text-white hover:bg-indigo-700'}">
                                 Quiero este plan
-                            </a>
-                            <a href="${linkPago}" target="_blank" class="block text-center text-xs mt-2 underline ${destacado ? 'text-indigo-100' : 'text-gray-400'}">
-                                Pagar con PayPal
-                            </a>
+                            </button>
                         </div>
                     `;
                 }).join('');
@@ -117,6 +137,43 @@
         }
 
         cargarPlanes();
+
+        /* =========================================================
+           3. MODAL DE RESUMEN — reemplaza el mailto: directo, que no
+           hacía nada visible si el navegador no tiene un correo
+           configurado por defecto.
+        ========================================================= */
+        let mensajePendiente = "";
+
+        function abrirResumenPlan(nombreProducto, nombrePlan, precio) {
+            document.getElementById("resumen-producto").innerText = nombreProducto;
+            document.getElementById("resumen-plan").innerText = "Plan " + nombrePlan;
+            document.getElementById("resumen-precio").innerText = precio + "€/mes";
+
+            const linkPago = `https://paypal.me/${PAYPAL_USUARIO}/${precio}EUR`;
+            document.getElementById("btn-paypal").href = linkPago;
+
+            const asunto = encodeURIComponent(`Interesado en ${nombreProducto} — Plan ${nombrePlan}`);
+            mensajePendiente = `Hola,\n\nMe interesa contratar:\n\nProducto: ${nombreProducto}\nPlan: ${nombrePlan} (${precio}€/mes)\n\nMis datos:\nNombre del negocio:\nTeléfono/email de contacto:\n\nGracias.`;
+            document.getElementById("btn-correo").href = `mailto:${CORREO_SOPORTE}?subject=${asunto}&body=${encodeURIComponent(mensajePendiente)}`;
+
+            document.getElementById("aviso-copiado").classList.add("hidden");
+            const modal = document.getElementById("modal-resumen");
+            modal.classList.remove("hidden");
+            modal.classList.add("flex");
+        }
+
+        function cerrarModalResumen() {
+            const modal = document.getElementById("modal-resumen");
+            modal.classList.add("hidden");
+            modal.classList.remove("flex");
+        }
+
+        function copiarMensaje() {
+            navigator.clipboard.writeText(mensajePendiente).then(() => {
+                document.getElementById("aviso-copiado").classList.remove("hidden");
+            });
+        }
     </script>
 </body>
 </html>

@@ -101,7 +101,21 @@
                 return;
             }
 
-            contenedor.innerHTML = productos.map(producto => {
+            // Si la URL trae ?producto=Carta%20Digital, muestra SOLO los
+            // productos cuyo nombre contenga ese texto (así demo.html y
+            // demo-admin.html pueden enlazar directo a "sus" planes, sin
+            // mostrar Lab Dental / Centro de Belleza en medio de esa demo).
+            const filtroProducto = new URLSearchParams(window.location.search).get('producto');
+            const productosAMostrar = filtroProducto
+                ? productos.filter(p => p.nombre.toLowerCase().includes(filtroProducto.toLowerCase()))
+                : productos;
+
+            if (productosAMostrar.length === 0) {
+                contenedor.innerHTML = '<p class="text-center text-gray-400">No encontramos ese producto. <a href="planes.html" class="text-indigo-500 underline">Ver todos los planes</a></p>';
+                return;
+            }
+
+            contenedor.innerHTML = productosAMostrar.map(producto => {
                 const planesDelProducto = planes.filter(p => p.productoId === producto.id)
                     .sort((a, b) => a.precio - b.precio);
 
